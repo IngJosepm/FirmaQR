@@ -19,6 +19,10 @@
   .FIRMADO { background: #d7f3e0; color: #0a7c42; }
   .doc-card { border: 1px solid #e0e0e0; border-radius: 8px; padding: 14px; margin-top: 14px; }
   .firmantes img { width: 64px; height: 64px; vertical-align: middle; }
+  .btn-icono { background: none; border: none; cursor: pointer; font-size: 18px; vertical-align: middle; margin-left: 6px; }
+  .agregar-firmante { margin-top: 10px; display: flex; gap: 6px; }
+  .agregar-firmante input { flex: 1; padding: 6px; }
+  .agregar-firmante button { margin-top: 0; padding: 6px 12px; font-size: 13px; }
 </style>
 </head>
 <body>
@@ -50,6 +54,7 @@ async function cargarLista() {
     div.innerHTML = `
       <strong>${doc.nombreArchivo}</strong>
       <span class="estado ${doc.estado}">${doc.estado}</span>
+      <button class="btn-icono" title="Ver / descargar PDF" onclick="window.open('${API}/${doc.id}/pdf', '_blank')">👁️</button>
       <table>
         <thead><tr><th>#</th><th>Correo</th><th>Estado</th><th>Firmado en</th><th>QR</th></tr></thead>
         <tbody>
@@ -62,9 +67,29 @@ async function cargarLista() {
               <td class="firmantes">${f.estado === "PENDIENTE" ? `<img src="${f.qrUrl}" alt="QR">` : ""}</td>
             </tr>`).join("")}
         </tbody>
-      </table>`;
+      </table>
+      <div class="agregar-firmante">
+        <input type="text" placeholder="agregar.otro@correo.com" id="nuevoCorreo-${doc.id}">
+        <button type="button" onclick="agregarFirmante('${doc.id}')">+ Agregar firmante</button>
+      </div>`;
     cont.appendChild(div);
   }
+}
+
+async function agregarFirmante(docId) {
+  const input = document.getElementById("nuevoCorreo-" + docId);
+  const correo = input.value.trim();
+  if (!correo) return;
+
+  const form = new FormData();
+  form.append("correo", correo);
+  const res = await fetch(`${API}/${docId}/firmantes`, { method: "POST", body: form });
+  if (!res.ok) {
+    alert("Error: " + await res.text());
+    return;
+  }
+  input.value = "";
+  cargarLista();
 }
 
 document.getElementById("formDoc").addEventListener("submit", async (ev) => {

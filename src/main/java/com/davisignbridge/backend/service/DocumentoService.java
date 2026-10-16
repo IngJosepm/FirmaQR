@@ -31,13 +31,16 @@ public class DocumentoService {
 
     private final DocumentoRepository documentoRepository;
     private final FirmanteRepository firmanteRepository;
+    private final EmailService emailService;
     private final String baseUrl;
 
     public DocumentoService(DocumentoRepository documentoRepository,
                              FirmanteRepository firmanteRepository,
+                             EmailService emailService,
                              @Value("${app.base-url}") String baseUrl) {
         this.documentoRepository = documentoRepository;
         this.firmanteRepository = firmanteRepository;
+        this.emailService = emailService;
         this.baseUrl = baseUrl;
     }
 
@@ -60,7 +63,39 @@ public class DocumentoService {
             documento.getFirmantes().add(firmante);
         }
         documento.recalcularEstado();
-        return documentoRepository.save(documento);
+        Documento guardado = documentoRepository.save(documento);
+
+        for (Firmante f : guardado.getFirmantes()) {
+            emailService.enviarQrAFirmante(f.getCorreo(), guardado.getNombreArchivo(), urlSesion(f.getToken()));
+        }
+
+        return guardado;
+    }
+
+    /**
+     * Agrega un firmante adicional a un documento ya existente (al final del
+     * orden de firma) y le envía su propio correo con el QR. Si el documento
+     * ya estaba FIRMADO, vuelve a PARCIAL (ya no está completo).
+     */
+    public Documento agregarFirmante(UUID documentoId, String correo) {
+        if (correo == null || correo.trim().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El correo es obligatorio");
+        }
+        Documento documento = obtener(documentoId);
+
+        int siguienteOrden = documento.getFirmantes().stream()
+                .mapToInt(Firmante::getOrden).max().orElse(-1) + 1;
+
+        Firmante firmante = new Firmante();
+        firmante.setDocumento(documento);
+        firmante.setCorreo(correo.trim());
+        firmante.setOrden(siguienteOrden);
+        documento.getFirmantes().add(firmante);
+        documento.recalcularEstado();
+
+        Documento guardado = documentoRepository.save(documento);
+        emailService.enviarQrAFirmante(correo.trim(), guardado.getNombreArchivo(), urlSesion(firmante.getToken()));
+        return guardado;
     }
 
     @Transactional(readOnly = true)
