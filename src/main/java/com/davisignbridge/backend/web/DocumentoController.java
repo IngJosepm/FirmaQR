@@ -33,16 +33,16 @@ public class DocumentoController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No se pudo leer el PDF", e);
         }
         Documento documento = service.crear(pdf.getOriginalFilename(), bytes, correos);
-        return service.aResumenDTO(documento);
+        return service.obtenerResumenDTO(documento.getId());
     }
 
     @GetMapping
     public List<DocumentoResumenDTO> listar() {
-        return service.listar().stream().map(service::aResumenDTO).toList();
+        return service.listarResumenes();
     }
 
     @GetMapping("/{id}")
     public DocumentoResumenDTO obtener(@PathVariable UUID id) {
-        return service.aResumenDTO(service.obtener(id));
+        return service.obtenerResumenDTO(id);
     }
 }

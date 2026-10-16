@@ -74,17 +74,47 @@ public class DocumentoService {
         return documentoRepository.findAll();
     }
 
-    @Transactional(readOnly = true)
-    public Firmante obtenerPorToken(UUID token) {
+    private Firmante obtenerPorToken(UUID token) {
         return firmanteRepository.findByToken(token)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Sesión no encontrada"));
+    }
+
+    // Los metodos aXxxDTO() acceden a asociaciones lazy (documento.firmantes,
+    // firmante.documento), asi que fetch + mapeo a DTO deben vivir en la MISMA
+    // transaccion -- de ahi que las lecturas publicas sean estas combinadas y
+    // no "obtener() + aDTO()" por separado desde el controller (eso rompia con
+    // LazyInitializationException al tener open-in-view=false).
+
+    @Transactional(readOnly = true)
+    public SesionDTO obtenerSesionDTO(UUID token) {
+        return aSesionDTO(obtenerPorToken(token));
+    }
+
+    @Transactional(readOnly = true)
+    public byte[] obtenerPdfActual(UUID token) {
+        return obtenerPorToken(token).getDocumento().getPdfActual();
+    }
+
+    @Transactional(readOnly = true)
+    public String obtenerNombreArchivo(UUID token) {
+        return obtenerPorToken(token).getDocumento().getNombreArchivo();
+    }
+
+    @Transactional(readOnly = true)
+    public DocumentoResumenDTO obtenerResumenDTO(UUID documentoId) {
+        return aResumenDTO(obtener(documentoId));
+    }
+
+    @Transactional(readOnly = true)
+    public List<DocumentoResumenDTO> listarResumenes() {
+        return listar().stream().map(this::aResumenDTO).toList();
     }
 
     /**
      * Registra la firma de {@code firmante} con el PDF ya firmado que subió la
      * app. Solo se acepta si es su turno (ver clase de doc arriba).
      */
-    public Documento registrarFirma(UUID token, byte[] pdfFirmado) {
+    public SesionDTO registrarFirma(UUID token, byte[] pdfFirmado) {
         Firmante firmante = obtenerPorToken(token);
         Documento documento = firmante.getDocumento();
 
@@ -99,7 +129,8 @@ public class DocumentoService {
         firmante.setFirmadoEn(Instant.now());
         documento.recalcularEstado();
 
-        return documentoRepository.save(documento);
+        documentoRepository.save(documento);
+        return aSesionDTO(firmante);
     }
 
     /** URL que se codifica en el QR: lo único que necesita la app para arrancar la sesión. */
@@ -107,7 +138,12 @@ public class DocumentoService {
         return baseUrl + "/api/sesion/" + token;
     }
 
-    public SesionDTO aSesionDTO(Firmante firmante) {
+    @Transactional(readOnly = true)
+    public void validarTokenExiste(UUID token) {
+        obtenerPorToken(token);
+    }
+
+    private SesionDTO aSesionDTO(Firmante firmante) {
         Documento documento = firmante.getDocumento();
         Firmante enTurno = documento.firmanteEnTurno();
         boolean tuTurno = enTurno != null && enTurno.getId().equals(firmante.getId());
@@ -123,7 +159,7 @@ public class DocumentoService {
         );
     }
 
-    public DocumentoResumenDTO aResumenDTO(Documento documento) {
+    private DocumentoResumenDTO aResumenDTO(Documento documento) {
         List<FirmanteResumenDTO> firmantes = documento.getFirmantes().stream()
                 .map(f -> new FirmanteResumenDTO(
                         f.getId(),

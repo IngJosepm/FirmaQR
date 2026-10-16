@@ -1,6 +1,5 @@
 package com.davisignbridge.backend.web;
 
-import com.davisignbridge.backend.domain.Firmante;
 import com.davisignbridge.backend.service.DocumentoService;
 import com.davisignbridge.backend.service.QrService;
 import com.davisignbridge.backend.web.dto.SesionDTO;
@@ -35,24 +34,22 @@ public class SesionController {
 
     @GetMapping("/{token}")
     public SesionDTO obtenerSesion(@PathVariable UUID token) {
-        Firmante firmante = service.obtenerPorToken(token);
-        return service.aSesionDTO(firmante);
+        return service.obtenerSesionDTO(token);
     }
 
     @GetMapping(value = "/{token}/pdf", produces = "application/pdf")
     public ResponseEntity<byte[]> descargarPdf(@PathVariable UUID token) {
-        Firmante firmante = service.obtenerPorToken(token);
-        byte[] pdf = firmante.getDocumento().getPdfActual();
+        byte[] pdf = service.obtenerPdfActual(token);
+        String nombre = service.obtenerNombreArchivo(token);
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "inline; filename=\"" + firmante.getDocumento().getNombreArchivo() + "\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + nombre + "\"")
                 .contentType(MediaType.APPLICATION_PDF)
                 .body(pdf);
     }
 
     @GetMapping(value = "/{token}/qr", produces = MediaType.IMAGE_PNG_VALUE)
     public ResponseEntity<byte[]> obtenerQr(@PathVariable UUID token) {
-        service.obtenerPorToken(token); // valida que el token exista (404 si no)
+        service.validarTokenExiste(token); // 404 si no existe
         byte[] png = qrService.generarPng(service.urlSesion(token), 300);
         return ResponseEntity.ok().contentType(MediaType.IMAGE_PNG).body(png);
     }
@@ -66,8 +63,6 @@ public class SesionController {
         } catch (IOException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No se pudo leer el PDF firmado", e);
         }
-        service.registrarFirma(token, bytes);
-        Firmante actualizado = service.obtenerPorToken(token);
-        return service.aSesionDTO(actualizado);
+        return service.registrarFirma(token, bytes);
     }
 }
