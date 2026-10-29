@@ -1,0 +1,17 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: davisign_bridge
+      POSTGRES_USER: davisign
+      POSTGRES_PASSWORD: davisign
+    ports:
+      # Puerto distinto al 5432 porque esta maquina ya tiene un PostgreSQL
+      # nativo instalado escuchando ahi.
+      - "15432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+
+volumes:
+  db-data:
